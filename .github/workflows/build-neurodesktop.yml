@@ -138,9 +138,14 @@ jobs:
       run: |
         git tag ${BUILDDATE}
         git push origin --tags
+    - name: Debug
+      run: |
+        docker images -a
+        echo "IMAGEID=$IMAGEID"
+        echo "BUILDDATE=$BUILDDATE"
     - name: Container image scan  
       if: ${{ env.DOCKERHUB_ORG != '' && (env.ROOTFS_NEW != env.ROOTFS_CACHE || github.event.inputs.force_push == 'true') }}
-      uses: aquasecurity/trivy-action@0.12.0
+      uses: aquasecurity/trivy-action@0.14.0
       with:
         image-ref: ${{ env.IMAGEID }}:${{ env.BUILDDATE }}
         format: table
