@@ -142,7 +142,7 @@ jobs:
       if: ${{ env.DOCKERHUB_ORG != '' && (env.ROOTFS_NEW != env.ROOTFS_CACHE || github.event.inputs.force_push == 'true') }}
       uses: aquasecurity/trivy-action@0.14.0
       with:
-        image-ref: ${{ env.IMAGEID }}:${{ env.BUILDDATE }}
+        image-ref: 'ghcr.io/aswinnarayanan/neurodesktop/neurodesktop:2023-11-22'
         format: table
         exit-code: '1'
         severity: CRITICAL
