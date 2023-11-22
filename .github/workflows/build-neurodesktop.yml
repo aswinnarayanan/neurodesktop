@@ -138,17 +138,6 @@ jobs:
       run: |
         git tag ${BUILDDATE}
         git push origin -f --tags
-    - name: Login to GHCR
-      uses: docker/login-action@v3
-      with:
-        registry: ghcr.io
-        username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Debugging
-      run: | 
-        echo "IMAGEID=$IMAGEID"
-        echo "BUILDDATE=$BUILDDATE"
-        echo "$IMAGEID:$BUILDDATE"
     - name: Container image scan
       if: ${{ env.DOCKERHUB_ORG != '' && (env.ROOTFS_NEW != env.ROOTFS_CACHE || github.event.inputs.force_push == 'true') }}
       uses: aquasecurity/trivy-action@0.14.0
@@ -159,6 +148,9 @@ jobs:
         severity: CRITICAL
         timeout: 25m0s
         skip-files: /opt/rclone-v1.60.1-linux-amd64/README.txt, /opt/rclone-v1.60.1-linux-amd64/README.html, /opt/rclone-v1.60.1-linux-amd64/rclone.1
+      env:
+          TRIVY_USERNAME: ${{ github.repository_owner }}
+          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
     - name: Generate issue on job failure
       if: always() && failure()
       uses: JasonEtco/create-an-issue@v2.9.1
