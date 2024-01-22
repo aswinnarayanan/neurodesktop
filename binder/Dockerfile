@@ -1,1 +1,1 @@
-FROM ghcr.io/neurodesk/neurodesktop/neurodesktop:2024-01-11
+FROM ghcr.io/neurodesk/neurodesktop/neurodesktop:2024-12-21
