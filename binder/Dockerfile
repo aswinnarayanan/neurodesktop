@@ -1,1 +1,1 @@
-FROM ghcr.io/neurodesk/neurodesktop/neurodesktop:2024-01-12
+FROM jupyter/base-notebook:2023-10-20
