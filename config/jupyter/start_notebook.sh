@@ -1,9 +1,9 @@
 #!/bin/bash
 # order: #### start_notebook.sh #### -> before_notebook.sh -> jupyter_notebook_config.py -> jupyterlab_startup.sh
 
-if [ -z "$GRANT_SUDO" ]; then
-export GRANT_SUDO='yes'
-fi
+# if [ -z "$GRANT_SUDO" ]; then
+# export GRANT_SUDO='yes'
+# fi
 if [ -z "$RESTARTABLE" ]; then
 export RESTARTABLE='yes'
 fi
