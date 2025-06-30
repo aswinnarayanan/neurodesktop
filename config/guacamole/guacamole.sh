@@ -5,12 +5,16 @@ if [ "$(uname -m)" == "aarch64" ]; then
     export JAVA_TOOL_OPTIONS="-XX:UseSVE=0"
 fi
 
-# Tomcat
-sudo --preserve-env=JAVA_TOOL_OPTIONS /usr/local/tomcat/bin/startup.sh
-
+# # Tomcat
+# if sudo -n true 2>/dev/null; then
+#     sudo --preserve-env=JAVA_TOOL_OPTIONS /usr/local/tomcat/bin/startup.sh
+# fi
+/usr/local/tomcat/bin/startup.sh
 
 # RDP
-sudo service xrdp start
+if sudo -n true 2>/dev/null; then
+    sudo service xrdp start
+fi
 
 # SSH/SFTP
 /usr/sbin/sshd -f /home/${NB_USER}/.ssh/sshd_config

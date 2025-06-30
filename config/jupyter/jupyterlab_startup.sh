@@ -6,7 +6,9 @@
 if [ ! -f "${HOME}/conda-readme.md" ] 
 then
     mkdir -p ${HOME}
-    sudo cp -rpn /tmp/${NB_USER} "$(dirname "${HOME}")"
+    if sudo -n true 2>/dev/null; then
+        sudo cp -rpn /tmp/${NB_USER} "$(dirname "${HOME}")"
+    fi
 fi
 
 # Function to check and apply chown if necessary
@@ -59,12 +61,14 @@ then
     cat /home/${NB_USER}/.ssh/id_rsa.pub >> /home/${NB_USER}/.ssh/authorized_keys
 fi
 
-
+if sudo -n true 2>/dev/null; then
+    ln -s /etc/guacamole/user-mapping-vnc-rdp.xml /etc/guacamole/user-mapping.xml
+else 
+    ln -s /etc/guacamole/user-mapping-vnc.xml /etc/guacamole/user-mapping.xml
+fi
 # Insert guacamole private key into user-mapping for ssh/sftp support
-
-if ! grep 'BEGIN RSA PRIVATE KEY' /etc/guacamole/user-mapping.xml
-then
-    sudo sed -i "/private-key/ r /home/${NB_USER}/.ssh/guacamole_rsa" /etc/guacamole/user-mapping.xml
+if ! grep 'BEGIN RSA PRIVATE KEY' /etc/guacamole/user-mapping.xml; then
+    sed -i "/private-key/ r /home/${NB_USER}/.ssh/guacamole_rsa" /etc/guacamole/user-mapping.xml
 fi
 
 # Create a symlink in home if /data is mounted
@@ -85,7 +89,9 @@ else
             mkdir -p /home/${NB_USER}/neurodesktop-storage/containers
         fi
         if [ ! -L "/neurodesktop-storage" ]; then
-            sudo ln -s /home/${NB_USER}/neurodesktop-storage/ /neurodesktop-storage
+            if sudo -n true 2>/dev/null; then
+                sudo ln -s /home/${NB_USER}/neurodesktop-storage/ /neurodesktop-storage
+            fi
         fi
     fi
 fi
@@ -103,7 +109,9 @@ if ! grep -iq 'cpu.*hz' /proc/cpuinfo; then
     cp /proc/cpuinfo $cpuinfo_file
     chmod u+rw $cpuinfo_file
     sed -i '/^$/c\cpu MHz         : 2245.778\n' $cpuinfo_file
-    sudo mount --bind $cpuinfo_file /proc/cpuinfo
+    if sudo -n true 2>/dev/null; then
+        sudo mount --bind $cpuinfo_file /proc/cpuinfo
+    fi
     echo "[INFO] Added CPU Mhz entry in /proc/cpuinfo to work around a bug in Matlab that expects this value to be present."
 fi
 
@@ -111,8 +119,10 @@ fi
 mkdir -p /tmp/apptainer_overlay
 
 # Start and stop SSH server to initialize host
-sudo service ssh restart
-sudo service ssh stop
+if sudo -n true 2>/dev/null; then
+    sudo service ssh restart
+    sudo service ssh stop
+fi
 
 conda init bash
 mamba init bash
