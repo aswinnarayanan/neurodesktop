@@ -8,7 +8,7 @@ USER root
 #========================================#
 # Core services
 #========================================#
- 
+
 
 # Install base image dependencies
 RUN apt-get update --yes \
@@ -265,7 +265,7 @@ COPY --chown=root:users config/jupyter/jupyter_notebook_config.py /etc/jupyter/j
 COPY --chown=root:users config/jupyter/jupyterlab_startup.sh /opt/neurodesktop/jupyterlab_startup.sh
 COPY --chown=root:users config/guacamole/guacamole.sh /opt/neurodesktop/guacamole.sh
 COPY --chown=root:users config/jupyter/environment_variables.sh /opt/neurodesktop/environment_variables.sh
-COPY --chown=root:users config/guacamole/user-mapping.xml /etc/guacamole/user-mapping.xml
+# COPY --chown=root:users config/guacamole/user-mapping.xml /etc/guacamole/user-mapping.xml
 
 RUN chmod +x /etc/jupyter/jupyter_notebook_config.py \
     /opt/neurodesktop/jupyterlab_startup.sh \
@@ -276,6 +276,10 @@ RUN chmod +x /etc/jupyter/jupyter_notebook_config.py \
 RUN mkdir -p /etc/guacamole \
     && echo -e "user-mapping: /etc/guacamole/user-mapping.xml\nguacd-hostname: 127.0.0.1" > /etc/guacamole/guacamole.properties \
     && echo -e "[server]\nbind_host = 127.0.0.1\nbind_port = 4822" > /etc/guacamole/guacd.conf
+RUN chown -R ${NB_UID}:${NB_GID} /etc/guacamole
+RUN chown -R ${NB_UID}:${NB_GID} /usr/local/tomcat
+COPY --chown=${NB_UID}:${NB_GID} config/guacamole/user-mapping-vnc.xml /etc/guacamole/user-mapping-vnc.xml
+COPY --chown=${NB_UID}:${NB_GID} config/guacamole/user-mapping-vnc-rdp.xml /etc/guacamole/user-mapping-vnc-rdp.xml
 
 # Add NB_USER to sudoers
 RUN echo "${NB_USER} ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers.d/notebook \
@@ -372,7 +376,9 @@ COPY config/cvmfs/default.local /etc/cvmfs/default.local
 RUN cp -rp /home/${NB_USER} /tmp/
 
 # Set up data directory so it exists in the container for the SINGULARITY_BINDPATH
-RUN mkdir -p /data
+RUN mkdir -p /data /neurodesktop-storage
+RUN chown ${NB_UID}:${NB_GID} /neurodesktop-storage \
+    && chmod 770 /neurodesktop-storage
 
 # Install neurocommand
 ADD "https://api.github.com/repos/neurodesk/neurocommand/git/refs/heads/main" /tmp/skipcache
@@ -382,6 +388,9 @@ RUN rm /tmp/skipcache \
     && bash build.sh --lxde --edit \
     && bash install.sh \
     && ln -s /home/${NB_USER}/neurodesktop-storage/containers /neurocommand/local/containers
+
+# TEST - Disable sudo
+# RUN rm /etc/sudoers.d/notebook
 
 USER ${NB_UID}
 
