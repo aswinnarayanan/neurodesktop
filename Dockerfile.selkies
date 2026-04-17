@@ -1,0 +1,126 @@
+###############################################################################
+# Neurodesktop Selkies PoC
+# Minimal: Jupyter + XFCE Desktop via Selkies-GStreamer (WebRTC)
+# Excludes: Guacamole, Tomcat, VNC, XRDP, CVMFS, neurocommand
+###############################################################################
+FROM quay.io/jupyter/base-notebook:2026-03-23
+
+LABEL maintainer="Neurodesk Project <www.neurodesk.org>"
+
+USER root
+
+#========================================#
+# 1. System dependencies
+#========================================#
+
+RUN apt-get update && apt-get install --no-install-recommends -y \
+    # Core
+    software-properties-common dbus-x11 dbus-user-session jq curl wget \
+    ca-certificates acl ssl-cert fakeroot kmod sudo \
+    # Virtual framebuffer
+    xvfb \
+    # XFCE desktop
+    xfce4 xfce4-terminal mesa-utils adwaita-icon-theme-full \
+    # X11 / input
+    x11-utils x11-xkb-utils x11-xserver-utils xserver-xorg-core \
+    wmctrl xclip xdotool xsel \
+    libx11-xcb1 libxcb-dri3-0 libxdamage1 libxfixes3 libxv1 libxtst6 \
+    libxext6 libxkbcommon-dev \
+    # Media codecs
+    libgcrypt20 libpulse0 libopus0 libvpx-dev x264 x265 \
+    xcvt libopenh264-dev svt-av1 aom-tools \
+    # GL / EGL / Vulkan
+    libdrm2 libegl1 libgl1 libopengl0 libgles1 libgles2 libglvnd0 libglx0 \
+    wayland-protocols libwayland-dev libwayland-egl1 \
+    mesa-va-drivers libva2 vainfo \
+    # Python (Selkies runtime -- must be system Python for GI bindings)
+    python3-pip python3-dev python3-gi python3-setuptools python3-wheel \
+    libgirepository-1.0-1 glib-networking libglib2.0-0 libgudev-1.0-0 \
+    # Compiler for evdev and other pip-built C extensions
+    build-essential \
+    # Audio (PipeWire + PulseAudio compat)
+    pipewire pipewire-alsa pipewire-audio-client-libraries \
+    pipewire-pulse wireplumber alsa-utils \
+    # Embedded TURN relay for container / K8s networking
+    coturn \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    # Suppress XFCE first-run panel dialog
+    && mkdir -p /etc/xdg/xfce4/xfconf/xfce-perchannel-xml \
+    && cp -f /etc/xdg/xfce4/panel/default.xml \
+       /etc/xdg/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml
+
+#========================================#
+# 2. Install Selkies-GStreamer from GitHub releases
+#========================================#
+
+ARG SELKIES_VERSION=""
+RUN set -eux; \
+    if [ -z "${SELKIES_VERSION}" ]; then \
+        SELKIES_VERSION="$(curl -fsSL \
+            'https://api.github.com/repos/selkies-project/selkies/releases/latest' \
+            | jq -r '.tag_name' | sed 's/[^0-9\.\-]*//g')"; \
+    fi; \
+    DISTRIB_RELEASE="$(grep '^VERSION_ID=' /etc/os-release | cut -d= -f2 | tr -d '"')"; \
+    ARCH="$(dpkg --print-architecture)"; \
+    echo "==> Selkies v${SELKIES_VERSION} for Ubuntu ${DISTRIB_RELEASE} (${ARCH})"; \
+    \
+    # GStreamer with Selkies plugins -> /opt/gstreamer
+    cd /opt && curl -fsSL \
+        "https://github.com/selkies-project/selkies/releases/download/v${SELKIES_VERSION}/gstreamer-selkies_gpl_v${SELKIES_VERSION}_ubuntu${DISTRIB_RELEASE}_${ARCH}.tar.gz" \
+        | tar -xzf -; \
+    \
+    # Python host backend (system pip, not conda)
+    cd /tmp && curl -O -fsSL \
+        "https://github.com/selkies-project/selkies/releases/download/v${SELKIES_VERSION}/selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
+    && PIP_BREAK_SYSTEM_PACKAGES=1 /usr/bin/pip3 install --no-cache-dir --force-reinstall \
+        "selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
+    && rm -f "selkies_gstreamer-${SELKIES_VERSION}-py3-none-any.whl" \
+    && command -v selkies-gstreamer >/dev/null || { echo "ERROR: selkies-gstreamer not installed"; exit 1; }; \
+    \
+    # HTML5 web client -> /opt/gst-web
+    cd /opt && curl -fsSL \
+        "https://github.com/selkies-project/selkies/releases/download/v${SELKIES_VERSION}/selkies-gstreamer-web_v${SELKIES_VERSION}.tar.gz" \
+        | tar -xzf -; \
+    \
+    # Patch hardcoded absolute paths so the client works behind JupyterLab ServerProxy.
+    # Selkies is normally reverse-proxied at root; ServerProxy adds /desktop/ prefix.
+    sed -i \
+        -e 's|fetch("/turn")|fetch("turn")|g' \
+        -e 's|fetch("/publish/" + app.appName|fetch("publish/" + app.appName|g' \
+        /opt/gst-web/app.js
+
+#========================================#
+# 3. Jupyter extensions (as notebook user)
+#========================================#
+
+USER ${NB_USER}
+RUN /opt/conda/bin/pip install --no-cache-dir jupyter-server-proxy
+
+#========================================#
+# 4. Startup scripts and Jupyter config
+#========================================#
+
+USER root
+
+RUN mkdir -p /opt/neurodesktop
+
+COPY --chown=root:users config/selkies/start_selkies.sh /opt/neurodesktop/start_selkies.sh
+RUN chmod +rx /opt/neurodesktop/start_selkies.sh
+
+COPY config/selkies/jupyter_notebook_config.py /etc/jupyter/jupyter_notebook_config.py
+RUN chmod +r /etc/jupyter/jupyter_notebook_config.py
+
+#========================================#
+# 5. Environment defaults
+#========================================#
+
+ENV DISPLAY=:20
+ENV SELKIES_ENCODER=x264enc
+ENV SELKIES_ENABLE_RESIZE=true
+ENV SELKIES_WEB_ROOT=/opt/gst-web
+
+# Set NB_USER password (matches Selkies basic auth default)
+RUN /usr/bin/printf '%s\n%s\n' 'password' 'password' | passwd ${NB_USER}
+
+USER root
+WORKDIR "/home/${NB_USER}"
